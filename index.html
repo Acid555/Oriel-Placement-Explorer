@@ -47,7 +47,7 @@ input[type=text],input[type=search],select,textarea{width:100%;padding:6px 8px;b
 // https://YOUR-SITE.goatcounter.com/count
 // Leave blank to disable analytics completely. No spreadsheet contents, programme data,
 // postcodes, preference ranks, notes or decisions are sent by these events.
-const ANALYTICS_URL='';
+const ANALYTICS_URL='https://acid555.goatcounter.com/count';
 function initAnalytics(){if(!ANALYTICS_URL)return;const s=document.createElement('script');s.async=true;s.src='https://gc.zgo.at/count.js';s.dataset.goatcounter=ANALYTICS_URL;document.head.appendChild(s)}
 function track(name){if(!ANALYTICS_URL)return;const send=()=>{try{window.goatcounter&&window.goatcounter.count({path:'event/'+name,title:name,event:true})}catch(e){}};if(window.goatcounter)send();else setTimeout(send,800)}
 initAnalytics();
