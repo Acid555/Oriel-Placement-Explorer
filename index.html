@@ -38,7 +38,7 @@ input[type=text],input[type=search],select,textarea{width:100%;padding:6px 8px;b
 <div class="controlcluster sortcluster"><span class="clusterlabel">Sort</span><select id="sort"><option value="d">Sort by: Nearest</option><option value="sal">Sort by: Salary</option><option value="n">Sort by: Name</option></select></div>
 </div>
 <div class="filtergrid">
-<details class="multi" id="tyDrop"><summary title="Primary employer type exactly as supplied by Oriel">Primary employer type <span class="multisum" id="tysum">All</span></summary><div class="checkmenu" id="ty"></div></details>
+<details class="multi" id="tyDrop"><summary title="Employer type from Oriel; for Wales, uses the first placement setting because Oriel supplies Employer Type as Other">Primary placement type <span class="multisum" id="tysum">All</span></summary><div class="checkmenu" id="ty"></div></details>
 <details class="multi" id="siteDrop"><summary>Sites <span class="multisum" id="sitesum">All</span></summary><div class="checkmenu" id="sitef"></div></details>
 </div>
 <div class="filter-options"><label class="filtercheck disabled" id="orielw" title="Upload your own Oriel spreadsheet to use your existing Oriel preferences"><input type="checkbox" id="oriel" disabled><span>Use existing Oriel preferences</span></label><label class="filtercheck"><input type="checkbox" id="vs"><span>Skilled worker visa sponsors only</span></label></div>
@@ -5019,8 +5019,78 @@ const DATA_VERSION=3,BASE_SNAPSHOT_DATE='1 October 2026';
 const decision=d=>(M[d.id]||{}).v||(useOriel?d.ov:'');
 const importedDecision=d=>!(M[d.id]||{}).v&&useOriel&&d.ov;
 const siteKind=d=>!d.sites.length?'unknown':d.sites.length>1?'split':'single';
+// Oriel supplies every NHS Wales programme with Employer Type = "Other".
+// For Wales only, use the first placement setting as the meaningful map/filter type.
+// Keep the original Oriel employer type in d.ty so imported/cached data remain compatible.
+const effectiveType=d=>{
+ const raw=d.ty||'Other';
+ if(String(d.rg||'').trim().toLowerCase()!='wales'||String(raw).trim().toLowerCase()!='other')return raw;
+ const first=String(d.st?.[0]?.[0]||'').trim();
+ if(first&&first.toLowerCase()!='other')return first;
+ if(/mental health/i.test(String(d.t||'')))return'Mental Health';
+ return raw
+};
+// More specific display names for rotations that Oriel itself labels as "Other".
+// These are used ONLY in the expanded listing's "Includes" line; raw Oriel data,
+// map colours and filters are not altered by this display-only lookup.
+const OTHER_SETTING_LABELS={
+ '1055':{3:'Care Home'},
+ '1493':{4:'Noormed Ltd'},
+ '1240':{3:'Care Home'},
+ '1380':{3:'Care Home'},
+ '4310':{2:'Health and Justice — Substance Misuse'},
+ '4311':{2:'Health and Justice — Substance Misuse'},
+ '4312':{2:'Health and Justice — Substance Misuse'},
+ '4313':{2:'Health and Justice — Substance Misuse'},
+ '4314':{2:'Health and Justice — Substance Misuse'},
+ '4317':{3:"Superintendent's Office"},
+ '2558':{2:'Outpatient Pharmacy'},
+ '2331':{2:'Outpatient Pharmacy'},
+ '8022':{1:'Mental Health'},
+ '2119':{2:'Urgent / Out-of-Hours Care'},
+ '8014':{1:'Mental Health'},
+ '2103':{2:'Community Health'},
+ '2573':{2:'Community Pharmacy'},
+ '7035':{2:'Mental Health'},
+ '2611':{2:'Urgent Care — Minor Injury Unit'},
+ '2613':{2:'Urgent Care — Minor Injury Unit'},
+ '2619':{2:'Urgent Care — Minor Injury Unit'},
+ '2605':{2:'Urgent Care — Primary Care Centre'},
+ '2608':{2:'Urgent Care — Primary Care Centre'},
+ '2597':{2:'Urgent Care — Minor Injury Unit'},
+ '2604':{2:'Urgent Care — Primary Care Centre'},
+ '2600':{2:'Urgent Care — Primary Care Centre'},
+ '2599':{2:'Urgent Care — Minor Injury Unit'},
+ '2612':{2:'Urgent Care — Walk-in Centre'},
+ '2598':{2:'Distance selling/internet pharmacy'},
+ '7025':{2:'Community Health'},
+ '5139':{2:'Private Hospital / Dental'},
+ '3089':{2:'Primary Care / Community Health'},
+ '3090':{2:'Primary Care / Community Health'},
+ '5352':{1:'Health Innovation Network'},
+ '5359':{1:'Health and Justice — Substance Misuse'},
+ '2571':{1:'Outpatient Pharmacy'},
+ '2572':{1:'Outpatient Pharmacy'},
+ '2082':{1:'Outpatient Pharmacy'},
+ '2480':{1:'Outpatient Pharmacy'},
+ '7059':{3:'Outpatient Pharmacy'},
+ '7062':{3:'Outpatient Pharmacy'},
+ '7100':{2:'Ambulance Service'},
+ '2517':{2:'Outpatient Pharmacy'}
+};
+const programmeNumber=d=>{const m=String(d.id||'').match(/\/(\d+)\s*$/);return m?m[1]:''};
+const displaySettingType=(d,s,i)=>{
+ const raw=String(s?.[0]||'').trim();
+ if(raw.toLowerCase()!='other')return raw;
+ return OTHER_SETTING_LABELS[programmeNumber(d)]?.[i+1]||raw
+};
+const settingDisplayHtml=(d,s,i)=>{
+ const raw=String(s?.[0]||'').trim(),shown=displaySettingType(d,s,i),derived=shown!=raw;
+ const tip=derived?' title="Oriel lists this rotation as Other; this is a more specific display label for this programme."':'';
+ return `<span${tip}>${esc(shown)} ${s[1]}w</span>`
+};
 const PAL=['#0ea5e9','#65a30d','#db2777','#0d9488','#a16207','#64748b'],FIX={'Community Pharmacy':'#2563eb','Hospital':'#0e7490','General Practice':'#fb923c','Other':'#9333ea'},HI='#ec4899';let TY=[],selM=null;const col=t=>FIX[t]||PAL[Math.max(0,TY.indexOf(t))%PAL.length];
-const siteMarkerStyle=(d,site)=>{const v=decision(d);return{radius:(S.sel==d.id&&site._selected)?9:5,color:(S.sel==d.id&&site._selected)?HI:v=='y'?'#16a34a':v=='n'?'#dc2626':'#fff',weight:v?3:1,fillColor:col(d.ty),fillOpacity:.9}};
+const siteMarkerStyle=(d,site)=>{const v=decision(d);return{radius:(S.sel==d.id&&site._selected)?9:5,color:(S.sel==d.id&&site._selected)?HI:v=='y'?'#16a34a':v=='n'?'#dc2626':'#fff',weight:v?3:1,fillColor:col(effectiveType(d)),fillOpacity:.9}};
 function paint(d){if(!d.sites)return;d.sites.forEach(site=>{if(site.m)site.m.setStyle(siteMarkerStyle(d,site))})}
 function hiSel(d,site){const old=selM;if(old&&old.sites){old.sites.forEach(x=>{x._selected=false});paint(old)}selM=d||null;if(d&&d.sites){if(site)site._selected=true;else d.sites.forEach(x=>{if(x.m)x._selected=true});paint(d)}}
 // ---- map
@@ -5034,9 +5104,9 @@ function sty(d){paint(d)}
 function mkm(d,site){site.m=L.circleMarker([site.la,site.lo],siteMarkerStyle(d,site));site.m.on('click',()=>pick(d,true,site));site.m.on('mouseover',e=>{tip.setLatLng(e.latlng).setContent(esc(d.n)+'<br>'+esc(site.pc)+(d.sites.length>1?' · split site':'')+(site.d!=null?' · '+site.d+' km straight-line':''));map.openTooltip(tip)});site.m.on('mouseout',()=>map.closeTooltip(tip));paint(d)}
 function attach(){E.forEach(d=>{let best=null;d.sites.forEach(site=>{const g=GC[site.pc];if(Array.isArray(g)){site.la=g[0];site.lo=g[1];if(!site.m)mkm(d,site);site.d=C&&site.la!=null?+hav(C.la,C.lo,site.la,site.lo).toFixed(1):null;if(site.d!=null&&(!best||site.d<best))best=site.d}});d.la=d.sites.find(s=>s.la!=null)?.la;d.lo=d.sites.find(s=>s.lo!=null)?.lo;d.d=best})}
 // ---- filtering + rendering
-const searchText=d=>(d.n+' '+d.t+' '+d.ds+' '+d.ty+' '+d.rg+' '+d.ar+' '+d.tp+' '+d.sites.map(x=>x.pc).join(' ')+' '+d.st.map(x=>x[0]).join(' ')).toLowerCase();
+const searchText=d=>(d.n+' '+d.t+' '+d.ds+' '+effectiveType(d)+' '+d.ty+' '+d.rg+' '+d.ar+' '+d.tp+' '+d.sites.map(x=>x.pc).join(' ')+' '+d.st.map(x=>x[0]).join(' ')).toLowerCase();
 const decisionMatch=(d,k)=>{const m=M[d.id]||{},v=decision(d);return k=='u'?!v:k=='note'?!!m.note:v==k};
-const baseOk=d=>{if(S.rg.size&&!S.rg.has(d.rg))return 0;if(S.ty.size&&!S.ty.has(d.ty))return 0;if(S.vs&&!d.vs)return 0;if(S.q&&!searchText(d).includes(S.q))return 0;if(S.mk.size&&![...S.mk].some(k=>decisionMatch(d,k)))return 0;return 1};
+const baseOk=d=>{if(S.rg.size&&!S.rg.has(d.rg))return 0;if(S.ty.size&&!S.ty.has(effectiveType(d)))return 0;if(S.vs&&!d.vs)return 0;if(S.q&&!searchText(d).includes(S.q))return 0;if(S.mk.size&&![...S.mk].some(k=>decisionMatch(d,k)))return 0;return 1};
 const ok=d=>{if(!baseOk(d))return 0;if(S.sitef.size&&!S.sitef.has(siteKind(d)))return 0;if(C){if(mode=='radius'&&(d.d==null||d.d>rad))return 0;if(mode=='area'&&bb&&!d.sites.some(s=>s.la!=null&&s.la>=bb[0]&&s.la<=bb[1]&&s.lo>=bb[2]&&s.lo<=bb[3]))return 0}return 1};
 const dirUrlSite=(d,site)=>'https://www.google.com/maps/dir/?api=1'+(C&&C.q?'&origin='+encodeURIComponent(C.q+', UK'):'')+'&destination='+encodeURIComponent(((site&&site.pc)||d.n)+', UK')+'&travelmode=transit';
 const dirUrl=d=>dirUrlSite(d,d.sites[0]);
@@ -5045,7 +5115,7 @@ const dateLabel=v=>{const s=String(v||'').trim(),m=s.match(/^(\d{1,2})[\/-](\d{1
 function metaSites(d){if(!d.sites.length)return '<span class="pc-unmapped">Exact site location unavailable</span>';return d.sites.map((s,i)=>s.la!=null?`<button class="sitebtn meta-site" data-site="${i}" title="Show ${esc(s.pc)} on map">${esc(s.pc)}</button>`:`<span class="pc-unmapped" title="Exact map location unavailable">${esc(s.pc)}</span>`).join(' · ')}
 function siteLinks(d){if(d.sites.length<2)return '';return '<div class="sites"><b>Sites</b>'+d.sites.map((s,i)=>`<div class="site-row"><button class="sitebtn" data-site="${i}">${esc(s.pc)}${s.d!=null?' · '+s.d+' km':''}</button><a class="site-dir" href="${dirUrlSite(d,s)}" target="_blank" rel="noopener">Directions ↗</a></div>`).join('')+'</div>'}
 function item(d,i){const m=M[d.id]||{},v=decision(d),imp=importedDecision(d),w=url(d.web),long=d.ds.length>260,start=dateLabel(d.sd),badge=v?`<span class="vb ${v}${imp?' imp':''}" title="${imp?'From Oriel export':'Manual decision'}">${v=='y'?'YES':'NO'}${imp?(v=='y'&&d.orank?' · ORIEL #'+esc(d.orank):' · ORIEL'):''}</span>`:'';return`<div class="it ${S.sel==d.id?'sel':''} ${v||''} ${imp?'impdec':''}" data-i="${i}"><div class="row"><span><b>${esc(d.n)}</b>${badge}${m.note?' 📝':''}</span><span class="d">${d.d!=null?d.d+' km':''}</span></div>
-<div class="m">${metaSites(d)} · ${esc(d.ar||d.rg)} · ${esc(d.ty)}${start?` · <span class="starttag">Starts ${esc(start)}</span>`:''}</div>${d.st.length?seg(d)+`<div class="m"><span class="mixlabel" title="Placement/rotation settings and durations supplied by Oriel">Includes:</span> ${d.st.map(s=>esc(s[0])+' '+s[1]+'w').join(' · ')}</div>`:''}
+<div class="m">${metaSites(d)} · ${esc(d.ar||d.rg)} · ${esc(effectiveType(d))}${start?` · <span class="starttag">Starts ${esc(start)}</span>`:''}</div>${d.st.length?seg(d)+`<div class="m"><span class="mixlabel" title="Placement/rotation settings and durations supplied by Oriel">Includes:</span> ${d.st.map((s,i)=>settingDisplayHtml(d,s,i)).join(' · ')}</div>`:''}
 <div class="det"><div class="vt"><button class="y ${m.v=='y'?'on':''}" data-a="y">✓ Yes</button><button class="n ${m.v=='n'?'on':''}" data-a="n">✗ No</button>${d.sites.length==1?`<a href="${dirUrl(d)}" target="_blank" rel="noopener">Directions ↗</a>`:''}</div>${siteLinks(d)}
 <div class="m">${esc(d.t)}<br>${d.sal?'£'+d.sal.toLocaleString()+' · ':''}${d.hr} h/wk · ${d.pl} place(s) · ${esc(d.tp)}${d.vs?' · visa sponsor':''}</div>
 <div class="ds" style="margin:6px 0">${esc(d.ds)}</div>${long?'<div class="desc-actions"><button class="lk" data-a="more">Read more</button></div>':''}${w?`<div class="webline"><a href="${esc(w)}" target="_blank" rel="noopener">Employer website ↗</a></div>`:''}
@@ -5072,8 +5142,8 @@ function renderSites(counts){const items=[['single','Single site'],['split','Spl
 function updateFilterActive(){const n=S.ty.size+S.sitef.size+S.rg.size+(S.vs?1:0)+S.mk.size+(S.q?1:0),bits=[];if(n)bits.push(n+' active');if(C)bits.push('location set');$('filterActive').textContent=bits.length?bits.join(' · '):'No filters applied'}
 function setFilterCollapsed(v){filtersCollapsed=!!v;$('flt').classList.toggle('collapsed',filtersCollapsed);if(filtersCollapsed)document.querySelectorAll('details.multi[open]').forEach(d=>d.open=false);$('filterChevron').textContent=filtersCollapsed?'▾':'▴';$('filterToggle').setAttribute('aria-expanded',String(!filtersCollapsed))}
 function filterContext(d,except){if(except!='rg'&&S.rg.size&&!S.rg.has(d.rg))return 0;if(except!='ty'&&S.ty.size&&!S.ty.has(d.ty))return 0;if(except!='site'&&S.sitef.size&&!S.sitef.has(siteKind(d)))return 0;if(S.vs&&!d.vs)return 0;if(S.q&&!searchText(d).includes(S.q))return 0;if(except!='mk'&&S.mk.size&&![...S.mk].some(k=>decisionMatch(d,k)))return 0;if(C){if(mode=='radius'&&(d.d==null||d.d>rad))return 0;if(mode=='area'&&bb&&!d.sites.some(s=>s.la!=null&&s.la>=bb[0]&&s.la<=bb[1]&&s.lo>=bb[2]&&s.lo<=bb[3]))return 0}return 1}
-function refreshFilters(){const tcBase=E.filter(d=>filterContext(d,'ty')),siteBase=E.filter(d=>filterContext(d,'site')),regionBase=E.filter(d=>filterContext(d,'rg')),decisionBase=E.filter(d=>filterContext(d,'mk')),types=[...new Set(tcBase.map(d=>d.ty).filter(Boolean).concat([...S.ty]))].sort(),tc=Object.fromEntries(types.map(x=>[x,tcBase.filter(d=>d.ty==x).length])),regions=[...new Set(regionBase.map(d=>d.rg).filter(Boolean).concat([...S.rg]))].sort(),rc=Object.fromEntries(regions.map(x=>[x,regionBase.filter(d=>d.rg==x).length])),dc=Object.fromEntries(['y','n','u','note'].map(x=>[x,decisionBase.filter(d=>decisionMatch(d,x)).length]));renderChecks('ty',types,S.ty,tc,1);renderSites({single:siteBase.filter(d=>siteKind(d)=='single').length,split:siteBase.filter(d=>siteKind(d)=='split').length,unknown:siteBase.filter(d=>siteKind(d)=='unknown').length});renderChecks('rg',regions,S.rg,rc,0);renderDecisions(dc);updateFilterActive()}
-function build(){TY=[...new Set(E.map(d=>d.ty))].sort();$('flt').classList.toggle('no-data',!E.length);$('listhead').style.display=E.length?'flex':'none';refreshFilters();const hasOriel=!isBase&&E.some(d=>d.orielField),oc=$('oriel'),ow=$('orielw');ow.style.display='flex';oc.disabled=!hasOriel;ow.classList.toggle('disabled',!hasOriel);oc.checked=hasOriel&&useOriel;ow.title=isBase?'Upload your own Oriel spreadsheet to use your existing Oriel preferences':hasOriel?'Use the Current Assigned Rank values from your uploaded Oriel spreadsheet':'This spreadsheet does not include Current Assigned Rank';$('leg').innerHTML=E.length?'<b>Primary employer type</b><br>'+TY.map(t=>`<span class="sw" style="background:${col(t)}"></span>${esc(t)}<br>`).join('')+'<span style="color:var(--g)">●</span> ring = Yes · <span style="color:var(--r)">●</span> ring = No':'';if(isBase){$('info').textContent=`${E.length.toLocaleString()} placements · built-in snapshot`;$('snapshotnote').style.display='inline-block';$('snapshotnote').innerHTML=`<b>Placements snapshot: ${BASE_SNAPSHOT_DATE}.</b> Upload a current Oriel spreadsheet for the latest placement list and your own Oriel preferences.`;$('load').textContent='Upload current spreadsheet'}else if(meta){$('info').textContent=`${meta.name} · loaded ${meta.date}`;$('snapshotnote').style.display='none';$('load').textContent='Update spreadsheet'}else{$('info').textContent='Upload your Oriel preferences spreadsheet to begin.';$('snapshotnote').style.display='none'}$('sessionnote').style.display=E.length?'block':'none';E.forEach(paint)}
+function refreshFilters(){const tcBase=E.filter(d=>filterContext(d,'ty')),siteBase=E.filter(d=>filterContext(d,'site')),regionBase=E.filter(d=>filterContext(d,'rg')),decisionBase=E.filter(d=>filterContext(d,'mk')),types=[...new Set(tcBase.map(d=>effectiveType(d)).filter(Boolean).concat([...S.ty]))].sort(),tc=Object.fromEntries(types.map(x=>[x,tcBase.filter(d=>effectiveType(d)==x).length])),regions=[...new Set(regionBase.map(d=>d.rg).filter(Boolean).concat([...S.rg]))].sort(),rc=Object.fromEntries(regions.map(x=>[x,regionBase.filter(d=>d.rg==x).length])),dc=Object.fromEntries(['y','n','u','note'].map(x=>[x,decisionBase.filter(d=>decisionMatch(d,x)).length]));renderChecks('ty',types,S.ty,tc,1);renderSites({single:siteBase.filter(d=>siteKind(d)=='single').length,split:siteBase.filter(d=>siteKind(d)=='split').length,unknown:siteBase.filter(d=>siteKind(d)=='unknown').length});renderChecks('rg',regions,S.rg,rc,0);renderDecisions(dc);updateFilterActive()}
+function build(){TY=[...new Set(E.map(d=>effectiveType(d)))].sort();$('flt').classList.toggle('no-data',!E.length);$('listhead').style.display=E.length?'flex':'none';refreshFilters();const hasOriel=!isBase&&E.some(d=>d.orielField),oc=$('oriel'),ow=$('orielw');ow.style.display='flex';oc.disabled=!hasOriel;ow.classList.toggle('disabled',!hasOriel);oc.checked=hasOriel&&useOriel;ow.title=isBase?'Upload your own Oriel spreadsheet to use your existing Oriel preferences':hasOriel?'Use the Current Assigned Rank values from your uploaded Oriel spreadsheet':'This spreadsheet does not include Current Assigned Rank';$('leg').innerHTML=E.length?'<b>Primary placement type</b><br>'+TY.map(t=>`<span class="sw" style="background:${col(t)}"></span>${esc(t)}<br>`).join('')+'<span style="color:var(--g)">●</span> ring = Yes · <span style="color:var(--r)">●</span> ring = No':'';if(isBase){$('info').textContent=`${E.length.toLocaleString()} placements · built-in snapshot`;$('snapshotnote').style.display='inline-block';$('snapshotnote').innerHTML=`<b>Placements snapshot: ${BASE_SNAPSHOT_DATE}.</b> Upload a current Oriel spreadsheet for the latest placement list and your own Oriel preferences.`;$('load').textContent='Upload current spreadsheet'}else if(meta){$('info').textContent=`${meta.name} · loaded ${meta.date}`;$('snapshotnote').style.display='none';$('load').textContent='Update spreadsheet'}else{$('info').textContent='Upload your Oriel preferences spreadsheet to begin.';$('snapshotnote').style.display='none'}$('sessionnote').style.display=E.length?'block':'none';E.forEach(paint)}
 $('filterToggle').onclick=()=>{setFilterCollapsed(!filtersCollapsed);kv.set('filtersCollapsed',filtersCollapsed)};
 $('oriel').onchange=e=>{if(e.target.disabled)return;useOriel=e.target.checked;if(useOriel)track('oriel_preferences_enabled');kv.set('useOriel',useOriel);shown=60;E.forEach(sty);refreshFilters();draw()};$('q').oninput=e=>{S.q=e.target.value.toLowerCase();saveFilters();later()};$('sort').onchange=e=>{sortAuto=false;S.sort=e.target.value;saveFilters();later()};$('vs').onchange=e=>{S.vs=e.target.checked;saveFilters();later()};
 $('clearFilters').onclick=()=>{S.ty.clear();S.sitef.clear();S.rg.clear();S.vs=false;S.mk.clear();S.q='';$('q').value='';$('vs').checked=false;shown=60;saveFilters();refreshFilters();draw()};
@@ -5100,13 +5170,13 @@ $('load').onclick=()=>$('file').click();$('file').onchange=e=>{e.target.files[0]
 addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>{e.preventDefault();e.dataTransfer.files[0]&&loadFile(e.dataTransfer.files[0])});
 // ---- my list
 const EM=()=>{const m={};E.forEach(d=>m[d.id]=d);return m};
-function renderMy(){const em=EM(),keys=Object.keys(M),sites=d=>d.sites.length?d.sites.map(s=>s.pc).join(' · '):'Location unavailable';const tb=(lab,col,f)=>{const r=keys.filter(k=>f(M[k])&&em[k]).map(k=>em[k]).sort((a,b)=>(a.d==null)-(b.d==null)||a.d-b.d);return`<h3 style="color:${col}">${lab} (${r.length})</h3>`+(r.length?`<div class="tablewrap"><table><tr><th>Employer</th><th>Sites</th><th>Nearest km</th><th>Type</th><th>Salary</th><th>Oriel rank</th><th>Note</th></tr>${r.map(d=>`<tr><td><a href="#" data-go="${esc(d.id)}">${esc(d.n)}</a></td><td>${esc(sites(d))}</td><td>${d.d==null?'':d.d}</td><td>${esc(d.ty)}</td><td>${d.sal?'£'+d.sal.toLocaleString():''}</td><td>${esc(d.orank||'')}</td><td>${esc((M[d.id]||{}).note)}</td></tr>`).join('')}</table></div>`:'<p class="m">None.</p>')};
+function renderMy(){const em=EM(),keys=Object.keys(M),sites=d=>d.sites.length?d.sites.map(s=>s.pc).join(' · '):'Location unavailable';const tb=(lab,col,f)=>{const r=keys.filter(k=>f(M[k])&&em[k]).map(k=>em[k]).sort((a,b)=>(a.d==null)-(b.d==null)||a.d-b.d);return`<h3 style="color:${col}">${lab} (${r.length})</h3>`+(r.length?`<div class="tablewrap"><table><tr><th>Employer</th><th>Sites</th><th>Nearest km</th><th>Placement type</th><th>Salary</th><th>Oriel rank</th><th>Note</th></tr>${r.map(d=>`<tr><td><a href="#" data-go="${esc(d.id)}">${esc(d.n)}</a></td><td>${esc(sites(d))}</td><td>${d.d==null?'':d.d}</td><td>${esc(effectiveType(d))}</td><td>${d.sal?'£'+d.sal.toLocaleString():''}</td><td>${esc(d.orank||'')}</td><td>${esc((M[d.id]||{}).note)}</td></tr>`).join('')}</table></div>`:'<p class="m">None.</p>')};
  $('ovb').innerHTML=tb('Yes','var(--g)',m=>m.v=='y')+tb('No','var(--r)',m=>m.v=='n')+tb('Notes only (no decision)','var(--mut)',m=>!m.v&&m.note)+(keys.some(k=>!em[k])?`<p class="m">${keys.filter(k=>!em[k]).length} saved item(s) aren’t in the currently loaded file.</p>`:'');
  $('ovb').querySelectorAll('[data-go]').forEach(a=>a.onclick=e=>{e.preventDefault();const d=em[a.dataset.go];$('ov').classList.remove('on');if(d)pick(d,true)})}
 $('mylist').onclick=()=>{renderMy();$('ov').classList.add('on')};$('ovx').onclick=()=>$('ov').classList.remove('on');$('ov').onclick=e=>{if(e.target==$('ov'))$('ov').classList.remove('on')};
 $('privacyBtn').onclick=()=>{updateAnalyticsUi();$('privacyOv').classList.add('on')};$('privacyX').onclick=()=>$('privacyOv').classList.remove('on');$('privacyOv').onclick=e=>{if(e.target==$('privacyOv'))$('privacyOv').classList.remove('on')};$('analyticsToggle').onchange=e=>setAnalyticsAllowed(e.target.checked);$('clearSaved').onclick=async()=>{if(!confirm('Clear all Oriel Placement Explorer data saved in this browser? This removes your uploaded spreadsheet cache, decisions, notes, cached map locations and settings. The explorer will return to the built-in placement snapshot. This cannot be undone unless you have a backup.'))return;await kv.clear();location.reload()};
 const dl=(name,txt,type)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click()};
-$('csv').onclick=()=>{track('decisions_exported');const em=EM(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',rows=[['Manual decision','Employer','Sites','Nearest distance km','Type','Salary','Oriel rank','Note']];Object.keys(M).forEach(k=>{const d=em[k],m=M[k];if(d)rows.push([m.v=='y'?'Yes':m.v=='n'?'No':'',d.n,d.sites.map(s=>s.pc).join('; '),d.d,d.ty,d.sal,d.orank||'',m.note])});dl('oriel_my_decisions.csv',rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv')};
+$('csv').onclick=()=>{track('decisions_exported');const em=EM(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',rows=[['Manual decision','Employer','Sites','Nearest distance km','Placement type','Salary','Oriel rank','Note']];Object.keys(M).forEach(k=>{const d=em[k],m=M[k];if(d)rows.push([m.v=='y'?'Yes':m.v=='n'?'No':'',d.n,d.sites.map(s=>s.pc).join('; '),d.d,effectiveType(d),d.sal,d.orank||'',m.note])});dl('oriel_my_decisions.csv',rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv')};
 $('bk').onclick=()=>dl('oriel_explorer_backup.json',JSON.stringify({v:2,marks:M}),'application/json');$('rs').onclick=()=>$('rsf').click();
 $('rsf').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());if(!j.marks||typeof j.marks!='object')throw 0;M=j.marks;await kv.set('marks',M);E.forEach(sty);refreshFilters();draw();renderMy()}catch(x){alert('Not a valid backup file.')}e.target.value=''};
 // ---- init
