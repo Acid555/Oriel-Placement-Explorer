@@ -57,7 +57,7 @@ input[type=text],input[type=search],select,textarea{width:100%;padding:6px 8px;b
 // https://YOUR-SITE.goatcounter.com/count
 // Leave blank to disable analytics completely. No spreadsheet contents, programme names,
 // postcodes, preference ranks, notes or decisions are sent by these events.
-const ANALYTICS_URL='';
+const ANALYTICS_URL='https://acid555.goatcounter.com/count';
 let analyticsAllowed=true,analyticsPageSent=false;try{analyticsAllowed=localStorage.getItem('oriel_analytics_optout')!=='1'}catch(e){}
 function analyticsPixel(path,title,event){if(!ANALYTICS_URL||!analyticsAllowed)return;try{const u=new URL(ANALYTICS_URL);u.searchParams.set('p',path);if(title)u.searchParams.set('t',title);if(event)u.searchParams.set('e','1');u.searchParams.set('rnd',Date.now().toString(36)+Math.random().toString(36).slice(2));const img=new Image();img.referrerPolicy='no-referrer';img.src=u.toString()}catch(e){}}
 function initAnalytics(){if(!ANALYTICS_URL||!analyticsAllowed||analyticsPageSent)return;analyticsPageSent=true;analyticsPixel(location.pathname||'/',document.title,false)}
